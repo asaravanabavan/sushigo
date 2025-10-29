@@ -42,7 +42,7 @@ public class ProbabilityTracker {
     }
 
     public void update(GameState state){
-        
+
     }
 
     private int countSeenCards(CardType type){
