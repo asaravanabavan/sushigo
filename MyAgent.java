@@ -13,10 +13,10 @@ import java.util.*;
  * MyAgent - Enhanced BasicMCTSPlayer with Determinization for Sushi Go!
  *
  * TEAM ARCHITECTURE:
- * - MyAgent.java (YOU) - Main MCTS agent with decision logic
+ * - MyAgent.java (JS) - Main MCTS agent with decision logic
  * - Determinizer.java (TEAMMATE) - Samples opponent hands for partial observability
  * - Heuristics.java (TEAMMATE) - Evaluates game states with Sushi Go! strategies
- * - config.json (YOU) - All tunable parameters
+ * - config.json (JS) - All tunable parameters
  *
  * ENHANCEMENT 1: Determinization (Level 4-5)
  * - Addresses partial observability (can't see opponent cards)
