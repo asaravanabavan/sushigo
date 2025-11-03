@@ -43,7 +43,7 @@ public class MyAgent extends BasicMCTSPlayer {
         super(makeParams());
         this.rnd = new Random(seed);
 
-        // Determinization helper (no parameters needed now)
+        // Determinization helper
         this.determinizer = new Determinizer();
 
         // Initialize both heuristics
@@ -91,8 +91,8 @@ public class MyAgent extends BasicMCTSPlayer {
             // Ask BasicMCTS with the blended heuristic
             AbstractAction choice = super._getAction(det, actions);
 
-            // Record vote
-            votes.merge(choice, 1, Integer::sum);
+            // Record vote - Explicitly return Integer to satisfy strict type checking
+            votes.merge(choice, Integer.valueOf(1), (oldVal, newVal) -> Integer.valueOf(oldVal + newVal));
         }
 
         // Return action with most votes
@@ -106,7 +106,6 @@ public class MyAgent extends BasicMCTSPlayer {
     public MyAgent copy() {
         MyAgent clone = new MyAgent(rnd.nextLong());
         clone.numDeterminizations = this.numDeterminizations;
-        // Don't try to copy params - it's handled by the constructor
         clone.setStateHeuristic(this.blendedHeu);
         clone.setForwardModel(getForwardModel());
         return clone;
@@ -151,6 +150,5 @@ public class MyAgent extends BasicMCTSPlayer {
         }
     }
 }
-
 
 
