@@ -43,6 +43,7 @@ this.blendedHeu = new BlendedHeuristic(classicHeu, sushiHeu, 0.5);
 The 0.5 value sets the blend ratio:
 1.0 → only use Heuristics
 0.0 → only use SushiGoHeuristic
+0.5 → equal mix (default)
 
 Run:
 gradlew run -PmainClass=evaluation.RunGames --args="--game SushiGo --nPlayers 3 --mode roundrobin --focusPlayer players.groupAJ.MyAgent --destDir results --addTimeStamp true"
@@ -59,5 +60,5 @@ Determinizer.java	Samples opponent hands for IS-MCTS
 config.json	Optional – records parameter notes
 
 
-0.5 → equal mix (default)
+
 
