@@ -1,200 +1,28 @@
 {
-  "agent": {
-    "name": "MyAgent",
-    "version": "2.0",
-    "authors": ["Group AJ - Josephine"],
-    "description": "Enhanced BasicMCTSPlayer with Determinization for Sushi Go!",
-    "package": "players.groupAJ",
-    "main_class": "MyAgent"
-  },
-  
-  "overview": {
-    "base_algorithm": "BasicMCTSPlayer (from TAG framework)",
-    "enhancements": [
-      "Determinization (IS-MCTS) - Level 4-5 complexity",
-      "Custom Heuristics - Level 3-4 complexity",
-      "Domain-specific evaluation function"
-    ],
-    "expected_performance": "48-52% win rate in 3-player games"
-  },
-  
   "architecture": {
-    "description": "Three-component design for team collaboration",
     "components": {
-      "MyAgent.java": {
-        "author": "Josephine",
-        "responsibility": "Main MCTS loop, determinization orchestration, parameter configuration",
-        "status": "Complete"
-      },
-      "Determinizer.java": {
-        "author": "Teammate 2",
-        "responsibility": "Opponent hand sampling for partial observability",
-        "status": "To be implemented",
-        "template_provided": true
-      },
-      "Heuristics.java": {
-        "author": "Teammate 3",
-        "responsibility": "Game state evaluation with Sushi Go! strategies",
-        "status": "To be implemented",
-        "template_provided": true
-      }
+      "MyAgent.java": { "author": "Josephine"},
+      "Determinizer.java": { "author": "Teammate 2" },
+      "Heuristics.java": { "author": "Teammate 3" },
+      "SushiGoHeuristic.java": { "author": "Josephine"}
     }
   },
-  
   "implementation_details": {
     "determinization": {
       "num_samples": 5,
-      "description": "Number of opponent hand samples per decision",
-      "hard_coded_in": "MyAgent.java line 52",
-      "voting_method": "Majority voting across samples",
-      "citation": "Cowling et al. (2012) Information Set MCTS",
-      "tuning_note": "To change: edit numDeterminizations field in MyAgent.java constructor"
+      "state_type": "SGGameState",
+      "voting_method": "Majority over samples"
     },
-    
-    "mcts_parameters": {
-      "K": 1.414,
-      "description_K": "Exploration constant (sqrt(2) theoretically optimal)",
-      "hard_coded_in": "MyAgent.java line 107",
-      
-      "rolloutLength": 12,
-      "description_rolloutLength": "Maximum simulation depth (covers full Sushi Go! round)",
-      "hard_coded_in": "MyAgent.java line 111",
-      
-      "maxTreeDepth": 10,
-      "description_maxTreeDepth": "Maximum MCTS tree depth",
-      "hard_coded_in": "MyAgent.java line 114",
-      
-      "epsilon": 1e-6,
-      "description_epsilon": "Small value for tie-breaking",
-      "hard_coded_in": "MyAgent.java line 117",
-      
-      "note": "These parameters are set in createOptimizedParams() method"
-    },
-    
     "heuristic_function": {
-      "description": "Implemented by Heuristics.java (teammate's responsibility)",
+      "description": "Two domain heuristics (Heuristics.java and SushiGoHeuristic.java) combined via BlendedHeuristic (alpha=0.5) inside MyAgent.java",
       "formula": "score = immediate + combos + pudding + chopsticks + blocking - risk",
-      "called_at": "MyAgent.java line 162",
-      "method": "heuristics.evaluateState()",
-      
-      "weights": {
-        "note": "These will be hard-coded in Heuristics.java by teammate",
-        "immediate_score": 1.0,
-        "combo_value": 1.5,
-        "pudding_strategy": 2.0,
-        "chopsticks_value": 1.2,
-        "opponent_blocking": 0.8,
-        "risk_penalty": 0.5
-      },
-      
-      "components": {
-        "immediate": "Current game score",
-        "combos": "Value of incomplete Tempura/Sashimi/Dumpling sets",
-        "pudding": "Dynamic strategy (max early, min late, balanced otherwise)",
-        "chopsticks": "Timing optimization (best used turns 4-7)",
-        "blocking": "Denying opponent combo completions",
-        "risk": "Penalty for incomplete sets near round end"
-      }
+      "weights_note": "Weights live in each heuristic class; blend weight alpha in MyAgent.java"
+    },
+    "mcts_parameters": {
+      "note": "Set in makeParams() in MyAgent.java (no fixed line numbers)"
     }
   },
-  
-  "how_to_tune": {
-    "change_determinizations": {
-      "file": "MyAgent.java",
-      "line": 52,
-      "current": "private int numDeterminizations = 5;",
-      "options": {
-        "fast": 3,
-        "balanced": 5,
-        "strong": 10
-      },
-      "tradeoff": "More samples = more robust but slower"
-    },
-    
-    "change_mcts_params": {
-      "file": "MyAgent.java",
-      "method": "createOptimizedParams()",
-      "lines": "102-123",
-      "note": "Edit the values directly in the method"
-    },
-    
-    "change_heuristic_weights": {
-      "file": "Heuristics.java",
-      "responsibility": "Teammate 3",
-      "note": "Weights will be hard-coded in that file"
-    }
-  },
-  
-  "performance_expectations": {
-    "decision_time": {
-      "with_3_determinizations": "~50ms per decision",
-      "with_5_determinizations": "~80ms per decision",
-      "with_10_determinizations": "~150ms per decision",
-      "note": "Times are approximate, depend on hardware"
-    },
-    
-    "win_rates": {
-      "vs_random": "70-75%",
-      "vs_osla": "50-55%",
-      "vs_basic_mcts": "52-58%",
-      "overall_expected": "48-52% in mixed 3-player games",
-      "note": "To be validated through experiments"
-    }
-  },
-  
-  "testing_protocol": {
-    "baseline_tests": {
-      "games_per_matchup": 500,
-      "thinking_time": 100,
-      "opponents": ["BasicMCTSPlayer", "OSLAPlayer", "RandomPlayer"],
-      "statistical_analysis": "Report win rates with 95% confidence intervals"
-    },
-    
-    "ablation_studies": {
-      "required": true,
-      "purpose": "Test each enhancement separately",
-      "variants_to_test": [
-        "MyAgent without determinization",
-        "MyAgent without custom heuristics",
-        "Full MyAgent",
-        "Compare contributions of each component"
-      ],
-      "games_per_variant": 500
-    },
-    
-    "validation": {
-      "games": 200,
-      "thinking_time": 1000,
-      "purpose": "Confirm findings hold with more thinking time"
-    }
-  },
-  
   "file_locations": {
-    "MyAgent.java": "src/main/java/players/groupAJ/MyAgent.java",
-    "Determinizer.java": "src/main/java/players/groupAJ/Determinizer.java",
-    "Heuristics.java": "src/main/java/players/groupAJ/Heuristics.java",
-    "config.json": "src/main/java/players/groupAJ/config.json",
-    "README.md": "src/main/java/players/groupAJ/README.md"
-  },
-  
-  "how_to_run": {
-    "single_game": "java -jar TAG.jar -g SushiGo -p groupAJ.MyAgent,Random,OSLA",
-    "multiple_games": "java -jar TAG.jar -g SushiGo -p groupAJ.MyAgent,Random,OSLA -n 500",
-    "with_seed": "java -jar TAG.jar -g SushiGo -p groupAJ.MyAgent -seed 12345",
-    "note": "Requires Determinizer.java and Heuristics.java to be implemented by teammates"
-  },
-  
-  "important_notes": {
-    "config_file_usage": "This config.json is DOCUMENTATION ONLY - MyAgent.java does not read this file at runtime",
-    "parameter_changes": "To change parameters, edit the values directly in MyAgent.java source code",
-    "team_coordination": "Share Determinizer_TEMPLATE.java and Heuristics_TEMPLATE.java with teammates",
-    "compilation": "Will not compile until teammates provide Determinizer.java and Heuristics.java",
-    "grade_level": "Level 4-5 complexity (IS-MCTS from literature + domain enhancements)"
-  },
-  
-  "references": {
-    "determinization": "Cowling, P. I., Powley, E. J., & Whitehouse, D. (2012). Information set monte carlo tree search. IEEE Transactions on Computational Intelligence and AI in Games, 4(2), 120-143.",
-    "mcts": "Browne, C. B., et al. (2012). A survey of monte carlo tree search methods. IEEE Transactions on Computational Intelligence and AI in Games, 4(1), 1-43.",
-    "tag_framework": "Gaina, R. D., et al. (2020). The 2019 two-player general video game playing competition. IEEE Transactions on Games, 12(4), 371-381."
+    "SushiGoHeuristic.java": "src/main/java/players/groupAJ/SushiGoHeuristic.java"
   }
 }
