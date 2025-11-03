@@ -6,7 +6,11 @@ import core.components.Deck;
 import games.sushigo.SGGameState;
 import games.sushigo.cards.SGCard;
 import core.components.Counter;
+/**
 
+ * SushiGoHeuristic via a weighted combiner
+ * author: Josephine
+ */
 
 public class SushiGoHeuristic implements IStateHeuristic {
 

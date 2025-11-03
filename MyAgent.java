@@ -13,13 +13,13 @@ import java.util.*;
 /**
  * MyAgent - BasicMCTS with determinization voting + blended heuristics.
  * Uses BOTH Heuristics and SushiGoHeuristic via a weighted combiner.
+ * author: Josephine
  */
 public class MyAgent extends BasicMCTSPlayer {
 
-    // --- tuning ---
+    // tuner
     private int numDeterminizations = 5;
 
-    // --- deps ---
     private final Random rnd;
     private final Determinizer determinizer;
 
@@ -39,21 +39,19 @@ public class MyAgent extends BasicMCTSPlayer {
         // determinization helper
         this.determinizer = new Determinizer();
 
-        // instantiate BOTH heuristics
-        this.classicHeu = new Heuristics();           // your “classic” multi-factor eval
-        this.sushiHeu   = new SushiGoHeuristic();     // the compact 6-term eval
+        this.classicHeu = new Heuristics();
+        this.sushiHeu   = new SushiGoHeuristic();
 
-        // weight = 0.5 -> simple average. Change to favor one side.
+        // weight = 0.5 = avg
         this.blendedHeu = new BlendedHeuristic(classicHeu, sushiHeu, 0.5);
 
-        // plug the blended heuristic into BasicMCTS
+
         this.setStateHeuristic(blendedHeu);
         this.setName("MyAgent");
     }
 
     private static BasicMCTSParams makeParams() {
         BasicMCTSParams p = new BasicMCTSParams();
-        // (fields vary slightly across TAG versions; guard with try)
         try { p.K = Math.sqrt(2); } catch (Throwable ignored) {}
         try { p.rolloutLength = 12; } catch (Throwable ignored) {}
         try { p.maxTreeDepth  = 10; } catch (Throwable ignored) {}
@@ -71,7 +69,6 @@ public class MyAgent extends BasicMCTSPlayer {
         Map<AbstractAction, Integer> votes = new HashMap<>();
 
         for (int i = 0; i < numDeterminizations; i++) {
-            // determinize from OUR information set
             SGGameState det = determinizer.determinize((SGGameState) gs, getPlayerID());
             // ask BasicMCTS with the blended heuristic
             AbstractAction choice = super._getAction(det, actions);
