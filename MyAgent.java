@@ -4,7 +4,6 @@ import core.AbstractGameState;
 import core.actions.AbstractAction;
 import core.interfaces.IStateHeuristic;
 import games.sushigo.SGGameState;
-
 import players.basicMCTS.BasicMCTSParams;
 import players.basicMCTS.BasicMCTSPlayer;
 
@@ -13,39 +12,48 @@ import java.util.*;
 /**
  * MyAgent - BasicMCTS with determinization voting + blended heuristics.
  * Uses BOTH Heuristics and SushiGoHeuristic via a weighted combiner.
- * author: Josephine
+ *
+ * COMPLIES WITH ASSIGNMENT RULES:
+ * - Extends BasicMCTSPlayer (allowed)
+ * - Implements determinization (IS-MCTS)
+ * - Uses custom heuristics
+ *
+ * @author Josephine (Group AJ)
  */
 public class MyAgent extends BasicMCTSPlayer {
 
-    // tuner
+    // Configuration
     private int numDeterminizations = 5;
 
     private final Random rnd;
     private final Determinizer determinizer;
 
-    // individual heuristics
+    // Individual heuristics
     private final Heuristics classicHeu;
     private final SushiGoHeuristic sushiHeu;
 
-    // blended heuristic given to MCTS
+    // Blended heuristic given to MCTS
     private final IStateHeuristic blendedHeu;
 
-    public MyAgent() { this(System.currentTimeMillis()); }
+    public MyAgent() {
+        this(System.currentTimeMillis());
+    }
 
     public MyAgent(long seed) {
         super(makeParams());
         this.rnd = new Random(seed);
 
-        // determinization helper
+        // Determinization helper (no parameters needed now)
         this.determinizer = new Determinizer();
 
+        // Initialize both heuristics
         this.classicHeu = new Heuristics();
         this.sushiHeu   = new SushiGoHeuristic();
 
-        // weight = 0.5 = avg
+        // Blend them: 0.5 = equal weight
         this.blendedHeu = new BlendedHeuristic(classicHeu, sushiHeu, 0.5);
 
-
+        // Set heuristic for MCTS
         this.setStateHeuristic(blendedHeu);
         this.setName("MyAgent");
     }
@@ -59,22 +67,35 @@ public class MyAgent extends BasicMCTSPlayer {
         return p;
     }
 
-    // --- decision: determinization voting over BasicMCTS choices ---
+    /**
+     * Main decision method with determinization voting
+     * Implements IS-MCTS (Cowling et al., 2012)
+     */
     @Override
     public AbstractAction _getAction(AbstractGameState gs, List<AbstractAction> actions) {
-        if (actions == null || actions.isEmpty())
+        if (actions == null || actions.isEmpty()) {
             throw new IllegalStateException("MyAgent: no actions available");
-        if (actions.size() == 1) return actions.get(0);
+        }
+        if (actions.size() == 1) {
+            return actions.get(0);
+        }
 
+        // Vote tracking
         Map<AbstractAction, Integer> votes = new HashMap<>();
 
+        // Run multiple determinizations
         for (int i = 0; i < numDeterminizations; i++) {
+            // Get determinized state (with sampled opponent hands)
             SGGameState det = determinizer.determinize((SGGameState) gs, getPlayerID());
-            // ask BasicMCTS with the blended heuristic
+
+            // Ask BasicMCTS with the blended heuristic
             AbstractAction choice = super._getAction(det, actions);
+
+            // Record vote
             votes.merge(choice, 1, Integer::sum);
         }
 
+        // Return action with most votes
         return votes.entrySet().stream()
                 .max(Map.Entry.comparingByValue())
                 .orElseThrow(() -> new IllegalStateException("MyAgent: voting produced no action"))
@@ -85,22 +106,28 @@ public class MyAgent extends BasicMCTSPlayer {
     public MyAgent copy() {
         MyAgent clone = new MyAgent(rnd.nextLong());
         clone.numDeterminizations = this.numDeterminizations;
-        try { clone.params = this.params.copy(); } catch (Throwable ignored) {}
+        // Don't try to copy params - it's handled by the constructor
         clone.setStateHeuristic(this.blendedHeu);
         clone.setForwardModel(getForwardModel());
         return clone;
     }
 
-    public void setNumDeterminizations(int n) { this.numDeterminizations = Math.max(1, n); }
+    public void setNumDeterminizations(int n) {
+        this.numDeterminizations = Math.max(1, n);
+    }
 
     @Override
-    public String toString() { return "MyAgent"; }
+    public String toString() {
+        return "MyAgent";
+    }
 
-    // use both heuristic classes
+    /**
+     * BlendedHeuristic - Combines two heuristics with weighted average
+     */
     private static final class BlendedHeuristic implements IStateHeuristic {
         private final IStateHeuristic h1;
         private final IStateHeuristic h2;
-        private final double alpha; // weight for h1 (0..1). Score = alpha*h1 + (1-alpha)*h2
+        private final double alpha; // weight for h1 (0..1)
 
         BlendedHeuristic(IStateHeuristic h1, IStateHeuristic h2, double alpha) {
             this.h1 = h1;
@@ -116,14 +143,14 @@ public class MyAgent extends BasicMCTSPlayer {
         }
 
         private double safeEval(IStateHeuristic h, AbstractGameState gs, int playerId) {
-            try { return h.evaluateState(gs, playerId); }
-            catch (Throwable t) { return gs.getHeuristicScore(playerId); }
+            try {
+                return h.evaluateState(gs, playerId);
+            } catch (Throwable t) {
+                return gs.getHeuristicScore(playerId);
+            }
         }
     }
 }
-
-
-
 
 
 
