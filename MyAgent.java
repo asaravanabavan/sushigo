@@ -1,252 +1,132 @@
 package players.groupAJ;
 
 import core.AbstractGameState;
-import core.AbstractPlayer;
 import core.actions.AbstractAction;
+import core.interfaces.IStateHeuristic;
 import games.sushigo.SGGameState;
-import players.basicMCTS.BasicMCTSPlayer;
+
 import players.basicMCTS.BasicMCTSParams;
+import players.basicMCTS.BasicMCTSPlayer;
 
 import java.util.*;
 
 /**
- * MyAgent - Enhanced BasicMCTSPlayer with Determinization for Sushi Go!
- *
- * TEAM ARCHITECTURE:
- * - MyAgent.java (JS) - Main MCTS agent with decision logic
- * - Determinizer.java (TEAMMATE) - Samples opponent hands for partial observability
- * - Heuristics.java (TEAMMATE) - Evaluates game states with Sushi Go! strategies
- * - config.json (JS) - All tunable parameters
- *
- * ENHANCEMENT 1: Determinization (Level 4-5)
- * - Addresses partial observability (can't see opponent cards)
- * - Samples N possible opponent hands
- * - Runs MCTS on each sample
- * - Majority voting to select final action
- *
- * ENHANCEMENT 2: Custom Heuristic Evaluation (Level 3-4)
- * - Uses Heuristics class for domain-specific scoring
- * - Guides MCTS with Sushi Go! knowledge
- * - Evaluates: combos, pudding, chopsticks, blocking, risk
- *
- * ENHANCEMENT 3: Smart Rollout Policy (Level 3-4)
- * - Guided simulations (not purely random)
- * - Uses Heuristics for quick evaluation
- * - More realistic game trajectories
- *
- * Expected Performance: 48-52% win rate
- * Complexity: Level 4-5 (IS-MCTS from literature + domain enhancements)
- *
- * @author Group AJ
- * @version 2.0
+ * MyAgent - BasicMCTS with determinization voting + blended heuristics.
+ * Uses BOTH Heuristics and SushiGoHeuristic via a weighted combiner.
  */
 public class MyAgent extends BasicMCTSPlayer {
 
-    // ===== CONFIGURATION =====
-
-    /**
-     * Number of determinizations per decision
-     * Higher = more robust but slower
-     * Default: 5 (good balance)
-     * Can be tuned in config.json
-     */
+    // --- tuning ---
     private int numDeterminizations = 5;
 
-    /**
-     * Determinizer instance (teammate's class)
-     * Handles sampling of opponent hands to address partial observability
-     */
-    private Determinizer determinizer;
+    // --- deps ---
+    private final Random rnd;
+    private final Determinizer determinizer;
 
-    /**
-     * Heuristics instance (teammate's class)
-     * Handles evaluation of game states with Sushi Go! strategies
-     */
-    private Heuristics heuristics;
+    // individual heuristics
+    private final Heuristics classicHeu;
+    private final SushiGoHeuristic sushiHeu;
 
-    // ===== CONSTRUCTORS =====
+    // blended heuristic given to MCTS
+    private final IStateHeuristic blendedHeu;
 
-    /**
-     * Default constructor
-     */
-    public MyAgent() {
-        super(createOptimizedParams());
-        this.determinizer = new Determinizer(rnd);
-        this.heuristics = new Heuristics();
-    }
+    public MyAgent() { this(System.currentTimeMillis()); }
 
-    /**
-     * Constructor with seed (for reproducibility)
-     */
     public MyAgent(long seed) {
-        super(createOptimizedParams());
-        parameters.setRandomSeed(seed);
-        rnd = new Random(seed);
-        this.determinizer = new Determinizer(rnd);
-        this.heuristics = new Heuristics();
+        super(makeParams());
+        this.rnd = new Random(seed);
+
+        // determinization helper
+        this.determinizer = new Determinizer();
+
+        // instantiate BOTH heuristics
+        this.classicHeu = new Heuristics();           // your “classic” multi-factor eval
+        this.sushiHeu   = new SushiGoHeuristic();     // the compact 6-term eval
+
+        // weight = 0.5 -> simple average. Change to favor one side.
+        this.blendedHeu = new BlendedHeuristic(classicHeu, sushiHeu, 0.5);
+
+        // plug the blended heuristic into BasicMCTS
+        this.setStateHeuristic(blendedHeu);
+        this.setName("MyAgent");
     }
 
-    /**
-     * Constructor with custom parameters
-     */
-    public MyAgent(BasicMCTSParams params) {
-        super(params);
-        this.determinizer = new Determinizer(rnd);
-        this.heuristics = new Heuristics();
+    private static BasicMCTSParams makeParams() {
+        BasicMCTSParams p = new BasicMCTSParams();
+        // (fields vary slightly across TAG versions; guard with try)
+        try { p.K = Math.sqrt(2); } catch (Throwable ignored) {}
+        try { p.rolloutLength = 12; } catch (Throwable ignored) {}
+        try { p.maxTreeDepth  = 10; } catch (Throwable ignored) {}
+        try { p.epsilon = 1e-6; } catch (Throwable ignored) {}
+        return p;
     }
 
-    /**
-     * Create optimized MCTS parameters for Sushi Go!
-     * Tuned for good performance with determinization
-     */
-    private static BasicMCTSParams createOptimizedParams() {
-        BasicMCTSParams params = new BasicMCTSParams();
-
-        // Exploration constant (UCB formula)
-        // sqrt(2) ≈ 1.41 is theoretically optimal
-        params.K = Math.sqrt(2);
-
-        // Maximum rollout depth
-        // Sushi Go! rounds have ~9 turns, so 12 covers full rounds
-        params.rolloutLength = 12;
-
-        // Maximum tree depth
-        params.maxTreeDepth = 10;
-
-        // Small epsilon for tie-breaking
-        params.epsilon = 1e-6;
-
-        // Set custom heuristic (will be overridden in setStateHeuristic)
-        params.heuristic = AbstractGameState::getHeuristicScore;
-
-        return params;
-    }
-
-    // ===== ENHANCEMENT 1: DETERMINIZATION (IS-MCTS) =====
-
-    /**
-     * Override getAction to implement Information Set MCTS
-     *
-     * This is the KEY enhancement that handles partial observability!
-     *
-     * ALGORITHM:
-     * 1. Run N determinizations (default: 5)
-     * 2. For each determinization:
-     *    a. Sample possible opponent hands using Determinizer
-     *    b. Run BasicMCTS search on this "determinized" state
-     *    c. Record which action MCTS chose
-     * 3. Use majority voting: pick action selected most often
-     *
-     * WHY THIS WORKS:
-     * - We don't know opponent cards (partial observability)
-     * - Sample many possible configurations
-     * - Pick action that works well across all samples
-     * - Robust to uncertainty!
-     *
-     * CITE: Cowling et al. (2012) "Information Set MCTS"
-     *
-     * @param gameState Current game state
-     * @param actions Available actions
-     * @return Best action based on determinization + MCTS
-     */
+    // --- decision: determinization voting over BasicMCTS choices ---
     @Override
-    public AbstractAction _getAction(AbstractGameState gameState, List<AbstractAction> actions) {
-        // If not Sushi Go or only 1 action, use default MCTS
-        if (!(gameState instanceof SGGameState) || actions.size() <= 1) {
-            return super._getAction(gameState, actions);
-        }
+    public AbstractAction _getAction(AbstractGameState gs, List<AbstractAction> actions) {
+        if (actions == null || actions.isEmpty())
+            throw new IllegalStateException("MyAgent: no actions available");
+        if (actions.size() == 1) return actions.get(0);
 
-        SGGameState sgState = (SGGameState) gameState;
+        Map<AbstractAction, Integer> votes = new HashMap<>();
 
-        // Set up custom heuristic before running MCTS
-        setStateHeuristic((state, playerId) -> heuristics.evaluateState((SGGameState) state, playerId));
-
-        // Track votes for each action across all determinizations
-        Map<AbstractAction, Integer> actionVotes = new HashMap<>();
-        for (AbstractAction action : actions) {
-            actionVotes.put(action, 0);
-        }
-
-        // Run multiple determinizations
         for (int i = 0; i < numDeterminizations; i++) {
-            // STEP 1: Create determinized state
-            // Teammate's Determinizer.determinize() method:
-            // - Identifies unseen cards (in opponent hands)
-            // - Randomly samples one possible configuration
-            // - Returns new state with sampled hands
-            SGGameState determinizedState = determinizer.determinize(sgState);
-
-            // STEP 2: Run BasicMCTS on this sampled state
-            // This searches the game tree assuming this configuration is true
-            AbstractAction selectedAction = super._getAction(determinizedState, actions);
-
-            // STEP 3: Record vote for this action
-            actionVotes.put(selectedAction, actionVotes.get(selectedAction) + 1);
+            // determinize from OUR information set
+            SGGameState det = determinizer.determinize((SGGameState) gs, getPlayerID());
+            // ask BasicMCTS with the blended heuristic
+            AbstractAction choice = super._getAction(det, actions);
+            votes.merge(choice, 1, Integer::sum);
         }
 
-        // STEP 4: Majority voting - pick action with most votes
-        AbstractAction bestAction = null;
-        int maxVotes = -1;
+        return votes.entrySet().stream()
+                .max(Map.Entry.comparingByValue())
+                .orElseThrow(() -> new IllegalStateException("MyAgent: voting produced no action"))
+                .getKey();
+    }
 
-        for (Map.Entry<AbstractAction, Integer> entry : actionVotes.entrySet()) {
-            if (entry.getValue() > maxVotes) {
-                maxVotes = entry.getValue();
-                bestAction = entry.getKey();
-            }
+    @Override
+    public MyAgent copy() {
+        MyAgent clone = new MyAgent(rnd.nextLong());
+        clone.numDeterminizations = this.numDeterminizations;
+        try { clone.params = this.params.copy(); } catch (Throwable ignored) {}
+        clone.setStateHeuristic(this.blendedHeu);
+        clone.setForwardModel(getForwardModel());
+        return clone;
+    }
+
+    public void setNumDeterminizations(int n) { this.numDeterminizations = Math.max(1, n); }
+
+    @Override
+    public String toString() { return "MyAgent"; }
+
+    // use both heuristic classes
+    private static final class BlendedHeuristic implements IStateHeuristic {
+        private final IStateHeuristic h1;
+        private final IStateHeuristic h2;
+        private final double alpha; // weight for h1 (0..1). Score = alpha*h1 + (1-alpha)*h2
+
+        BlendedHeuristic(IStateHeuristic h1, IStateHeuristic h2, double alpha) {
+            this.h1 = h1;
+            this.h2 = h2;
+            this.alpha = Math.max(0.0, Math.min(1.0, alpha));
         }
 
-        return bestAction != null ? bestAction : actions.get(0);
-    }
+        @Override
+        public double evaluateState(AbstractGameState gs, int playerId) {
+            double s1 = safeEval(h1, gs, playerId);
+            double s2 = safeEval(h2, gs, playerId);
+            return alpha * s1 + (1.0 - alpha) * s2;
+        }
 
-    // Note: BasicMCTSPlayer doesn't expose heuristic() and rollout() methods for overriding
-    // Instead, we set a custom heuristic via setStateHeuristic() which is called during MCTS
-    // The heuristic is set in _getAction() before running MCTS
-
-    // ===== CONFIGURATION METHODS =====
-
-    /**
-     * Set number of determinizations per decision
-     *
-     * Tradeoff:
-     * - More determinizations = more robust but slower
-     * - Fewer = faster but less robust
-     *
-     * Recommended:
-     * - Fast mode: 3 determinizations (~50ms)
-     * - Balanced: 5 determinizations (~80ms)
-     * - Strong: 10 determinizations (~150ms)
-     *
-     * @param num Number of determinizations (1-20)
-     */
-    public void setNumDeterminizations(int num) {
-        this.numDeterminizations = Math.max(1, Math.min(20, num));
-    }
-
-    /**
-     * Get current number of determinizations
-     */
-    public int getNumDeterminizations() {
-        return numDeterminizations;
-    }
-
-    // ===== REQUIRED FRAMEWORK METHODS =====
-
-    /**
-     * Create a copy of this agent
-     * Required by TAG framework for game simulations
-     */
-    @Override
-    public BasicMCTSPlayer copy() {
-        MyAgent copy = new MyAgent((BasicMCTSParams) getParameters().copy());
-        copy.setNumDeterminizations(this.numDeterminizations);
-        return copy;
-    }
-
-    /**
-     * Get string representation
-     */
-    @Override
-    public String toString() {
-        return "MyAgent";
+        private double safeEval(IStateHeuristic h, AbstractGameState gs, int playerId) {
+            try { return h.evaluateState(gs, playerId); }
+            catch (Throwable t) { return gs.getHeuristicScore(playerId); }
+        }
     }
 }
+
+
+
+
+
+
