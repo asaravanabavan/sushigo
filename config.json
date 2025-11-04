@@ -1,28 +1,27 @@
 {
   "architecture": {
     "components": {
-      "MyAgent.java": { "author": "Josephine"},
-      "Determinizer.java": { "author": "Teammate 2" },
-      "Heuristics.java": { "author": "Teammate 3" },
-      "SushiGoHeuristic.java": { "author": "Josephine"}
+      "MyAgent.java": "Main agent (BasicMCTS + determinization + blended heuristics)",
+      "Determinizer.java": "Samples hidden hands for IS-MCTS",
+      "Heuristics.java": "Feature-based heuristic",
+      "SushiGoHeuristic.java": "Counter-based heuristic"
     }
   },
-  "implementation_details": {
-    "determinization": {
-      "num_samples": 5,
-      "state_type": "SGGameState",
-      "voting_method": "Majority over samples"
-    },
-    "heuristic_function": {
-      "description": "Two domain heuristics (Heuristics.java and SushiGoHeuristic.java) combined via BlendedHeuristic (alpha=0.5) inside MyAgent.java",
-      "formula": "score = immediate + combos + pudding + chopsticks + blocking - risk",
-      "weights_note": "Weights live in each heuristic class; blend weight alpha in MyAgent.java"
-    },
-    "mcts_parameters": {
-      "note": "Set in makeParams() in MyAgent.java (no fixed line numbers)"
-    }
+  "search": {
+    "numDeterminizations": 5,
+    "uct": "sqrt(2)",
+    "rolloutLength": 12,
+    "maxTreeDepth": 10
   },
-  "file_locations": {
-    "SushiGoHeuristic.java": "src/main/java/players/groupAJ/SushiGoHeuristic.java"
+  "heuristics": {
+    "blendAlpha": 0.5,
+    "variants": ["SIMPLE", "BALANCED", "AGGRESSIVE", "STRATEGIC"],
+    "weightsNote": "Weights set inside each heuristic class; alpha set in MyAgent"
+  },
+  "run": {
+    "mainClassPreferred": "evaluation.RunGames",
+    "focusPlayer": "players.groupAJ.MyAgent",
+    "exampleCLI": "gradlew run -PmainClass=evaluation.RunGames --args=\"--game SushiGo --nPlayers 3 --mode roundrobin --focusPlayer players.groupAJ.MyAgent --destDir results --addTimeStamp true\""
   }
 }
+
